@@ -218,15 +218,16 @@ class CorrectorRunner():
         x_mod = torch.autograd.Variable(x_mod, requires_grad=True)
         # with torch.no_grad():
         for _ in range(n_steps):
+            print(_)
             images.append(torch.clamp(x_mod.detach(), 0.0, 1.0).to('cpu'))
             noise = torch.randn_like(x_mod) * np.sqrt(step_lr * 2)
             
             grad = torch.autograd.grad(flow.log_prob(x_mod.view(x_mod.shape[0],-1)).sum(), [x_mod], retain_graph=True)[0]
             grad += scorenet(x_mod).detach()
             x_mod.data.add_(x_mod.data + step_lr * grad + noise)
-            # print("modulus of grad components: mean {}, max {}".format(grad.abs().mean(), grad.abs().max()))
+            print("modulus of grad components: mean {}, max {}".format(grad.abs().mean(), grad.abs().max()))
 
-            return images
+        return images
 
     def test(self,flow=None,score=None,iters=None):
         if not score:
