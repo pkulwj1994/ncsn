@@ -166,11 +166,10 @@ class CorrectorRunner():
                 # loss = dsm_score_estimation(score, X, sigma=0.01)
                 logp = flow.log_prob(X.view(X.shape[0],-1))
                 stats, norms, grad_norms, logp_u = stein_stats(logp, X, score, approx_jcb=True, n_samples=1)
-                loss = stats.mean()
-                l2_penalty = norms.mean()
+                loss = stats.mean()- norms.mean()
 
                 optimizer.zero_grad()
-                (-1. * loss + l2_penalty).backward()
+                loss.backward()
                 optimizer.step()
 
                 tb_logger.add_scalar('loss', loss, global_step=step)
