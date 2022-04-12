@@ -179,7 +179,7 @@ class BaselineRunner():
                 noise = torch.randn_like(x_mod) * np.sqrt(step_lr * 2)
                 grad = scorenet(x_mod)
                 x_mod = x_mod + step_lr * grad + noise
-                print("modulus of grad components: mean {}, max {}".format(grad.abs().mean(), grad.abs().max()))
+#                 print("modulus of grad components: mean {}, max {}".format(grad.abs().mean(), grad.abs().max()))
 
             return images
 
