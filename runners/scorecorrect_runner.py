@@ -18,11 +18,11 @@ from PIL import Image
 import shutil
 from losses.stein import keep_grad, approx_jacobian_trace, exact_jacobian_trace, stein_stats
 
-from NICE import nice, utils
+from models import nice, utils
 
-__all__ = ['BaselineRunner']
+__all__ = ['CorrectorRunner']
 
-class BaselineRunner():
+class CorrectorRunner():
     def __init__(self, args, config):
         self.args = args
         self.config = config
@@ -165,7 +165,7 @@ class BaselineRunner():
                 X.requires_grad_()
                 # loss = dsm_score_estimation(score, X, sigma=0.01)
                 logp = flow.log_prob(X.view(X.shape[0],-1))
-                stats, norms, grad_norms, logp_u = stein_stats(logp, X, score)
+                stats, norms, grad_norms, logp_u = stein_stats(logp, X, score, approx_jcb=True, n_samples=1)
                 loss = stats.mean()
                 l2_penalty = norms.mean()
 
@@ -205,30 +205,67 @@ class BaselineRunner():
                     # torch.save(states, os.path.join(self.args.log, 'checkpoint_{}.pth'.format(step)))
                     torch.save(states, os.path.join(self.args.log, 'checkpoint.pth'))
 
-                    with torch.no_grad():
-                        self.test(score=score,iters=step)
+                    # with torch.no_grad():
+                    self.test(flow=flow,score=score,iters=step)
 
 
-    def Langevin_dynamics(self, x_mod, scorenet, n_steps=1000, step_lr=0.00002):
+    def Langevin_dynamics(self, x_mod, scorenet, flow, n_steps=1000, step_lr=0.00002):
         images = []
 
-        with torch.no_grad():
-            for _ in range(n_steps):
-                images.append(torch.clamp(x_mod, 0.0, 1.0).to('cpu'))
-                noise = torch.randn_like(x_mod) * np.sqrt(step_lr * 2)
-                grad = scorenet(x_mod)
-                x_mod = x_mod + step_lr * grad + noise
-                print("modulus of grad components: mean {}, max {}".format(grad.abs().mean(), grad.abs().max()))
+        b,c,h,w = x_mod.shape
+
+        x_mod = flow.sample(b).to(self.config.device).view(x_mod.shape).detach()
+        x_mod = torch.autograd.Variable(x_mod, requires_grad=True)
+        # with torch.no_grad():
+        for _ in range(n_steps):
+            images.append(torch.clamp(x_mod.detach(), 0.0, 1.0).to('cpu'))
+            noise = torch.randn_like(x_mod) * np.sqrt(step_lr * 2)
+            
+            grad = torch.autograd.grad(flow.log_prob(x_mod.view(x_mod.shape[0],-1)).sum(), [x_mod], retain_graph=True)[0]
+            grad += scorenet(x_mod).detach()
+            x_mod.data.add_(x_mod.data + step_lr * grad + noise)
+            # print("modulus of grad components: mean {}, max {}".format(grad.abs().mean(), grad.abs().max()))
 
             return images
 
-    def test(self,score=None,iters=None):
+    def test(self,flow=None,score=None,iters=None):
         if not score:
             states = torch.load(os.path.join(self.args.log, 'checkpoint.pth'), map_location=self.config.device)
             score = RefineNetDilated(self.config).to(self.config.device)
             score = torch.nn.DataParallel(score)
 
             score.load_state_dict(states[0])
+
+        if not flow:
+            ## load pretrained flow model
+            args = torch.load('models/mnist/saved_dicts')
+
+            # model hyperparameters
+            dataset = args["dataset"]
+            latent = args["latent"]
+            coupling = args['coupling']
+            mask_config = args["mask_config"]
+            full_dim = args["full_dim"]
+            mid_dim = args["mid_dim"]
+            hidden = args["hidden"]
+                
+            if latent == 'normal':
+                prior = torch.distributions.Normal(
+                    torch.tensor(0.).to(device), torch.tensor(1.).to(device))
+            elif latent == 'logistic':
+                prior = utils.StandardLogistic()
+
+            flow = nice.NICE(prior=prior, 
+                        coupling=coupling, 
+                        in_out_dim=full_dim, 
+                        mid_dim=mid_dim, 
+                        hidden=hidden, 
+                        mask_config=mask_config).to(self.config.device)
+            flow.load_state_dict(args["model_state_dict"])
+
+            for p in flow.parameters():
+                p.requires_grad_(False)
+      
 
         grid_size = 5
         
@@ -260,7 +297,7 @@ class BaselineRunner():
 
             samples = torch.rand(grid_size**2, 1, self.config.data.image_size, self.config.data.image_size,
                                  device=self.config.device)
-            all_samples = self.Langevin_dynamics(samples, score, 1000, 0.00002)
+            all_samples = self.Langevin_dynamics(samples, score,flow, 1000, 0.00002)
 
             for i, sample in enumerate(tqdm.tqdm(all_samples, total=len(all_samples), desc='saving images')):
                 sample = sample.view(grid_size ** 2, self.config.data.channels, self.config.data.image_size,
@@ -293,7 +330,7 @@ class BaselineRunner():
             samples = torch.rand(grid_size ** 2, 3, self.config.data.image_size, self.config.data.image_size,
                                  device=self.config.device)
 
-            all_samples = self.Langevin_dynamics(samples, score, 1000, 0.00002)
+            all_samples = self.Langevin_dynamics(samples, score,flow, 1000, 0.00002)
 
             # for i, sample in enumerate(tqdm.tqdm(all_samples)):
             #     sample = sample.view(100, self.config.data.channels, self.config.data.image_size,
@@ -336,7 +373,7 @@ class BaselineRunner():
             samples = samples.cuda()
             samples = torch.rand_like(samples)
 
-            # all_samples = self.Langevin_dynamics(samples, score, 1000, 0.00002)
+            all_samples = self.Langevin_dynamics(samples, score,flow, 1000, 0.00002)
 
             # for i, sample in enumerate(tqdm.tqdm(all_samples)):
             #     sample = sample.view(100, self.config.data.channels, self.config.data.image_size,
