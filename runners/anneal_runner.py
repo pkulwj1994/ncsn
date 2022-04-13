@@ -219,12 +219,13 @@ class AnnealRunner():
             return images
 
 
-    def test(self):
-        states = torch.load(os.path.join(self.args.log, 'checkpoint.pth'), map_location=self.config.device)
-        score = CondRefineNetDilated(self.config).to(self.config.device)
-        score = torch.nn.DataParallel(score)
+    def test(self,score=None,iters=None):
+        if not score:
+            states = torch.load(os.path.join(self.args.log, 'checkpoint.pth'), map_location=self.config.device)
+            score = CondRefineNetDilated(self.config).to(self.config.device)
+            score = torch.nn.DataParallel(score)
 
-        score.load_state_dict(states[0])
+            score.load_state_dict(states[0])
 
         if not os.path.exists(self.args.image_folder):
             os.makedirs(self.args.image_folder)
@@ -275,9 +276,12 @@ class AnnealRunner():
 
                 save_image(image_grid, os.path.join(self.args.image_folder, 'image_{}.png'.format(i)), nrow=10)
                 torch.save(sample, os.path.join(self.args.image_folder, 'image_raw_{}.pth'.format(i)))
-
-        imgs[0].save(os.path.join(self.args.image_folder, "movie.gif"), save_all=True, append_images=imgs[1:], duration=1, loop=0)
-
+        shutil.rmtree(self.args.image_folder)
+        # imgs[0].save(os.path.join(self.args.image_folder, "movie.gif"), save_all=True, append_images=imgs[1:], duration=1, loop=0)
+        if iters:
+            imgs[0].save("{}_movie.gif".format(iters), save_all=True, append_images=imgs[1:], duration=1, loop=0)
+        else:
+            imgs[0].save("movie.gif", save_all=True, append_images=imgs[1:], duration=1, loop=0)
     def anneal_Langevin_dynamics_inpainting(self, x_mod, refer_image, scorenet, sigmas, n_steps_each=100,
                                             step_lr=0.000008):
         images = []
@@ -390,5 +394,8 @@ class AnnealRunner():
                 save_image(image_grid, os.path.join(self.args.image_folder, 'image_completion_{}.png'.format(i)))
                 torch.save(sample, os.path.join(self.args.image_folder, 'image_completion_raw_{}.pth'.format(i)))
 
-
-        imgs[0].save(os.path.join(self.args.image_folder, "movie.gif"), save_all=True, append_images=imgs[1:], duration=1, loop=0)
+        # imgs[0].save(os.path.join(self.args.image_folder, "movie.gif"), save_all=True, append_images=imgs[1:], duration=1, loop=0)
+        if iters:
+            imgs[0].save("{}_movie.gif".format(iters), save_all=True, append_images=imgs[1:], duration=1, loop=0)
+        else:
+            imgs[0].save("movie.gif", save_all=True, append_images=imgs[1:], duration=1, loop=0)
