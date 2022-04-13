@@ -308,7 +308,7 @@ class CorrectorRunner():
                     sample = torch.sigmoid(sample)
 
                 image_grid = make_grid(sample, nrow=grid_size)
-                if i % 10 == 0:
+                if i % 1 == 0:
                     im = Image.fromarray(image_grid.mul_(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to('cpu', torch.uint8).numpy())
                     imgs.append(im)
 
