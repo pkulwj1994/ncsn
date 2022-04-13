@@ -166,7 +166,8 @@ class CorrectorRunner():
                 # loss = dsm_score_estimation(score, X, sigma=0.01)
                 logp = flow.log_prob(X.view(X.shape[0],-1))
                 stats, norms, grad_norms, logp_u = stein_stats(logp, X, score, approx_jcb=True, n_samples=1)
-                loss = stats.mean()- norms.mean()
+                loss = -1*stats.mean() + 0.5*norms.mean()
+                # score = s_flow - s_pd
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -222,7 +223,7 @@ class CorrectorRunner():
             noise = torch.randn_like(x_mod) * np.sqrt(step_lr * 2)
             
             grad = torch.autograd.grad(flow.log_prob(x_mod.view(x_mod.shape[0],-1)).sum(), [x_mod], retain_graph=True)[0]
-            grad += scorenet(x_mod).detach()
+            grad -= scorenet(x_mod).detach()
             x_mod.data.add_(x_mod.data + step_lr * grad + noise)
             print("modulus of grad components: mean {}, max {}".format(grad.abs().mean(), grad.abs().max()))
 
