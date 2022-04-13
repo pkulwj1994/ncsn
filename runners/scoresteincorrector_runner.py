@@ -53,7 +53,8 @@ class ScoreSteincorrectorRunnner():
             p.requires_grad_(False)
         basescore.eval()
         print(" base score loaded")
-        
+
+      
         if self.config.data.random_flip is False:
             tran_transform = test_transform = transforms.Compose([
                 transforms.Resize(self.config.data.image_size),
@@ -149,13 +150,19 @@ class ScoreSteincorrectorRunnner():
                 X = X / 256. * 255. + torch.rand_like(X) / 256.
                 if self.config.data.logit_transform:
                     X = self.logit_transform(X)
-
+                
                 labels = torch.randint(0, len(sigmas), (X.shape[0],), device=X.device)
-                if self.config.training.algo == 'dsm':
-                    loss = anneal_dsm_score_estimation(score, X, labels, sigmas, self.config.training.anneal_power)
-                elif self.config.training.algo == 'ssm':
-                    loss = anneal_sliced_score_estimation_vr(score, X, labels, sigmas,
-                                                             n_particles=self.config.training.n_particles)
+                # if self.config.training.algo == 'dsm':
+                #     loss = anneal_dsm_score_estimation(score, X, labels, sigmas, self.config.training.anneal_power)
+                # elif self.config.training.algo == 'ssm':
+                #     loss = anneal_sliced_score_estimation_vr(score, X, labels, sigmas,
+                #                                              n_particles=self.config.training.n_particles)
+                thisscore = basescore(X,labels.long()).detach()
+
+                X.requires_grad_()
+                stats, norms = stein_stats_withscore(thisscore, X,labels.long(), score, approx_jcb=True, n_samples=1)
+                loss = -1*stats.mean() + 0.5*norms.mean()
+                # score = s_flow - s_pd
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -167,27 +174,6 @@ class ScoreSteincorrectorRunnner():
                 if step >= self.config.training.n_iters:
                     return 0
 
-                if step % 100 == 0:
-                    score.eval()
-                    try:
-                        test_X, test_y = next(test_iter)
-                    except StopIteration:
-                        test_iter = iter(test_loader)
-                        test_X, test_y = next(test_iter)
-
-                    test_X = test_X.to(self.config.device)
-                    test_X = test_X / 256. * 255. + torch.rand_like(test_X) / 256.
-                    if self.config.data.logit_transform:
-                        test_X = self.logit_transform(test_X)
-
-                    test_labels = torch.randint(0, len(sigmas), (test_X.shape[0],), device=test_X.device)
-
-                    with torch.no_grad():
-                        test_dsm_loss = anneal_dsm_score_estimation(score, test_X, test_labels, sigmas,
-                                                                    self.config.training.anneal_power)
-
-                    tb_logger.add_scalar('test_dsm_loss', test_dsm_loss, global_step=step)
-
                 if step % self.config.training.snapshot_freq == 0:
                     states = [
                         score.state_dict(),
@@ -195,6 +181,8 @@ class ScoreSteincorrectorRunnner():
                     ]
                     torch.save(states, os.path.join(self.args.log, 'checkpoint_{}.pth'.format(step)))
                     torch.save(states, os.path.join(self.args.log, 'checkpoint.pth'))
+
+                    self.test(basescore=basescore,score=score,iters=step)
 
     def Langevin_dynamics(self, x_mod, scorenet, n_steps=200, step_lr=0.00005):
         images = []
@@ -213,7 +201,7 @@ class ScoreSteincorrectorRunnner():
 
             return images
 
-    def anneal_Langevin_dynamics(self, x_mod, scorenet, sigmas, n_steps_each=100, step_lr=0.00002):
+    def anneal_Langevin_dynamics(self, x_mod, basescore, scorenet, sigmas, n_steps_each=100, step_lr=0.00002):
         images = []
 
         with torch.no_grad():
@@ -224,7 +212,7 @@ class ScoreSteincorrectorRunnner():
                 for s in range(n_steps_each):
                     images.append(torch.clamp(x_mod, 0.0, 1.0).to('cpu'))
                     noise = torch.randn_like(x_mod) * np.sqrt(step_size * 2)
-                    grad = scorenet(x_mod, labels)
+                    grad = basescore(x_mod, labels) - scorenet(x_mod, labels)
                     x_mod = x_mod + step_size * grad + noise
                     # print("class: {}, step_size: {}, mean {}, max {}".format(c, step_size, grad.abs().mean(),
                     #                                                          grad.abs().max()))
@@ -232,7 +220,17 @@ class ScoreSteincorrectorRunnner():
             return images
 
 
-    def test(self,score=None,iters=None):
+    def test(self,basescore=None,score=None,iters=None):
+        if not basescore:
+            states = torch.load(os.path.join(self.args.log, 'checkpoint.pth'), map_location=self.config.device)
+            basescore = CondRefineNetDilated(self.config).to(self.config.device)
+            basescore = torch.nn.DataParallel(basescore)
+
+            basescore.load_state_dict(states[0])
+            for p in basescore.parameters():
+                p.requires_grad_(False)
+            basescore.eval()
+
         if not score:
             states = torch.load(os.path.join(self.args.log, 'checkpoint.pth'), map_location=self.config.device)
             score = CondRefineNetDilated(self.config).to(self.config.device)
@@ -252,7 +250,7 @@ class ScoreSteincorrectorRunnner():
         imgs = []
         if self.config.data.dataset == 'MNIST':
             samples = torch.rand(grid_size ** 2, 1, 28, 28, device=self.config.device)
-            all_samples = self.anneal_Langevin_dynamics(samples, score, sigmas, 100, 0.00002)
+            all_samples = self.anneal_Langevin_dynamics(samples, basescore, score, sigmas, 100, 0.00002)
 
             for i, sample in enumerate(tqdm.tqdm(all_samples, total=len(all_samples), desc='saving images')):
                 sample = sample.view(grid_size ** 2, self.config.data.channels, self.config.data.image_size,
@@ -295,6 +293,8 @@ class ScoreSteincorrectorRunnner():
             imgs[0].save("{}_movie.gif".format(iters), save_all=True, append_images=imgs[1:], duration=1, loop=0)
         else:
             imgs[0].save("movie.gif", save_all=True, append_images=imgs[1:], duration=1, loop=0)
+
+
     def anneal_Langevin_dynamics_inpainting(self, x_mod, refer_image, scorenet, sigmas, n_steps_each=100,
                                             step_lr=0.000008):
         images = []
