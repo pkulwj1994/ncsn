@@ -41,11 +41,11 @@ def stein_stats(logp, x, critic, approx_jcb=True, n_samples=1):
     return stats, norms, grad_norms, lp
 
 
-def stein_stats_withscore(score, x, critic, approx_jcb=True, n_samples=1):
+def stein_stats_withscore(score, x,y, critic, approx_jcb=True, n_samples=1):
 
     sq = score
 
-    fx = critic(x)
+    fx = critic(x,y)
     sq_fx = (sq * fx).sum([-1,-2,-3])
 
     if approx_jcb==False:
