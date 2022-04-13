@@ -152,6 +152,8 @@ class ScoreSteincorrectorRunnner():
                     X = self.logit_transform(X)
                 
                 labels = torch.randint(0, len(sigmas), (X.shape[0],), device=X.device)
+                used_sigmas = sigmas[labels].view(X.shape[0], *([1] * len(X.shape[1:])))
+                X = X + torch.randn_like(X) * used_sigmas
                 # if self.config.training.algo == 'dsm':
                 #     loss = anneal_dsm_score_estimation(score, X, labels, sigmas, self.config.training.anneal_power)
                 # elif self.config.training.algo == 'ssm':
