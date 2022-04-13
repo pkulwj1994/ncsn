@@ -6,7 +6,7 @@ def keep_grad(output, input, grad_outputs=None):
 def approx_jacobian_trace(fx, x):
     eps = torch.randn_like(fx)
     eps_dfdx = keep_grad(fx, x, grad_outputs=eps)
-    tr_dfdx = (eps_dfdx * eps).sum(-1)
+    tr_dfdx = (eps_dfdx * eps).sum([-1,-2,-3])
     return tr_dfdx
 
 
@@ -37,7 +37,7 @@ def stein_stats(logp, x, critic, approx_jcb=True, n_samples=1):
 
     stats = sq_fx + tr_dfdx
     norms = (fx * fx).sum([-1,-2,-3])
-    grad_norms = (sq * sq).view(x.size(0), -1).sum([-1,-2,-3])
+    grad_norms = (sq * sq).view(x.size(0), -1).sum(-1)
     return stats, norms, grad_norms, lp
 
 
@@ -56,5 +56,4 @@ def stein_stats_withscore(score, x,y, critic, approx_jcb=True, n_samples=1):
 
     stats = sq_fx + tr_dfdx
     norms = (fx * fx).sum([-1,-2,-3])
-    grad_norms = (sq * sq).view(x.size(0), -1).sum([-1,-2,-3])
     return stats, norms
