@@ -405,5 +405,9 @@ class CorrectorRunner():
         shutil.rmtree(self.args.image_folder)
         if iters:
             imgs[0].save("{}_movie.gif".format(iters), save_all=True, append_images=imgs[1:], duration=1, loop=0)
+            try:
+                imgs[0].save("/content/drive/MyDrive/{}_movie.gif".format(iters), save_all=True, append_images=imgs[1:], duration=1, loop=0)
+            except:
+                pass
         else:
             imgs[0].save("movie.gif", save_all=True, append_images=imgs[1:], duration=1, loop=0)
