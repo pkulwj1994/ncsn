@@ -41,6 +41,17 @@ class ScoreSteincorrectorRunnner():
         return torch.log(image) - torch.log1p(-image)
 
     def train(self):
+        ## load base score
+
+        states = torch.load(os.path.join("run/logs/mnist", 'checkpoint.pth'), map_location=self.config.device)
+        basescore = CondRefineNetDilated(self.config).to(self.config.device)
+        basescore = torch.nn.DataParallel(basescore)
+        basescore.load_state_dict(states[0])
+        for p in basescore.parameters():
+            p.requires_grad_(False)
+        basescore.eval()
+        print(" base score loaded")
+        
         if self.config.data.random_flip is False:
             tran_transform = test_transform = transforms.Compose([
                 transforms.Resize(self.config.data.image_size),
