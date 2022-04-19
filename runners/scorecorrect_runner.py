@@ -165,7 +165,8 @@ class CorrectorRunner():
                 X.requires_grad_()
                 # loss = dsm_score_estimation(score, X, sigma=0.01)
                 logp = flow.log_prob(X.view(X.shape[0],-1))
-                stats, norms, grad_norms, logp_u = stein_stats(logp, X, score, approx_jcb=True, n_samples=1)
+                stats, norms, grad_norms, logp_u = stein_stats(logp, X, score, approx_jcb=False, n_samples=1)
+
                 loss = -1*stats.mean() + 0.5*norms.mean()
                 # score = s_flow - s_pd
 
