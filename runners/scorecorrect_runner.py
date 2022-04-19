@@ -225,7 +225,7 @@ class CorrectorRunner():
             
             grad = torch.autograd.grad(flow.log_prob(x_mod.view(x_mod.shape[0],-1)).sum(), [x_mod], retain_graph=True)[0]
             grad -= scorenet(x_mod).detach()
-            x_mod.data.add_(x_mod.data + step_lr * grad + noise)
+            x_mod.data.add_(step_lr * grad + noise)
             print("modulus of grad components: mean {}, max {}".format(grad.abs().mean(), grad.abs().max()))
 
         return images
