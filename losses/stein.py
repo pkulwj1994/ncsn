@@ -12,12 +12,13 @@ def approx_jacobian_trace(fx, x):
 
 def exact_jacobian_trace(fx, x):
     vals = []
+    fx = fx.view(fx.shape[0],-1)
     for i in range(x.size(1)):
         fxi = fx[:, i]
         dfxi_dxi = keep_grad(fxi.sum(), x)[:, i][:, None]
         vals.append(dfxi_dxi)
     vals = torch.cat(vals, dim=1)
-    return vals.sum(dim=1)
+    return vals.mean(dim=[-1,-2,-3])
 
 
 def stein_stats(logp, x, critic, approx_jcb=True, n_samples=1):
