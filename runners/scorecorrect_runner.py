@@ -299,7 +299,7 @@ class CorrectorRunner():
 
             samples = torch.rand(grid_size**2, 1, self.config.data.image_size, self.config.data.image_size,
                                  device=self.config.device)
-            all_samples = self.Langevin_dynamics(samples, score,flow, 5, 0.00002)
+            all_samples = self.Langevin_dynamics(samples, score,flow, 5, 0.01)
 
             for i, sample in enumerate(tqdm.tqdm(all_samples, total=len(all_samples), desc='saving images')):
                 sample = sample.view(grid_size ** 2, self.config.data.channels, self.config.data.image_size,
