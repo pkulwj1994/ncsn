@@ -12,7 +12,7 @@ from torchvision.datasets import MNIST, CIFAR10, FashionMNIST
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, Subset
 from datasets.celeba import CelebA
-from models.refinenet_dilated_baseline import RefineNetDilated
+from models.refinenet_dilated_baseline import RefineNetDilated, init_net
 from torchvision.utils import save_image, make_grid
 from PIL import Image
 import shutil
@@ -140,6 +140,7 @@ class CorrectorRunner():
 
         tb_logger = tensorboardX.SummaryWriter(log_dir=tb_path)
         score = RefineNetDilated(self.config).to(self.config.device)
+        score = init_net(score, 'zero', 0.002, [0])
 
         score = torch.nn.DataParallel(score)
 
