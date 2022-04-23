@@ -168,7 +168,7 @@ class CorrectorRunner():
                 logp = flow.log_prob(X.view(X.shape[0],-1))
                 stats, norms, grad_norms, logp_u = stein_stats(logp, X, score, approx_jcb=False, n_samples=1)
 
-                loss = -1*stats.mean() + 0.5*norms.mean()/self.config.training.l2_labmda
+                loss = -1*stats.mean() + 0.5*norms.mean()/self.config.training.l2_lambda
                 # score = s_flow - s_pd
 
                 optimizer.zero_grad()
@@ -225,8 +225,9 @@ class CorrectorRunner():
             noise = torch.randn_like(x_mod) * np.sqrt(step_lr * 2)
             
             grad = torch.autograd.grad(flow.log_prob(x_mod.view(x_mod.shape[0],-1)).sum(), [x_mod], retain_graph=True)[0]
-            grad -= scorenet(x_mod).detach()/self.config.training.l2_labmda
-            x_mod.data.add_(step_lr * grad + noise)
+            grad -= scorenet(x_mod).detach()/self.config.training.l2_lambda
+            # x_mod.data.add_(step_lr * grad + noise)
+            x_mod.data.add_(step_lr * grad + noise)            
             print("modulus of grad components: mean {}, max {}".format(grad.abs().mean(), grad.abs().max()))
 
         return images
