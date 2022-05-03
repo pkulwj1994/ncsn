@@ -46,3 +46,6 @@ optim:
   lr: 0.001
   beta1: 0.9
   amsgrad: false
+
+sampling:
+  denoise: true
