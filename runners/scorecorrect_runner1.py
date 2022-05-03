@@ -119,7 +119,14 @@ class ScoreCorrectRunner():
         ## load base score
         basescore = CondRefineNetDilated(self.config).to(self.config.device)
         basescore = torch.nn.DataParallel(basescore)
-        states = torch.load(os.path.join("run/logs/cifar10", 'checkpoint.pth'), map_location=self.config.device)
+
+        if self.config.data.dataset == 'MNIST':
+            states = torch.load(os.path.join("run/logs/mnist", 'checkpoint.pth'), map_location=self.config.device)
+        elif self.config.data.dataset == 'CIFAR10':
+            states = torch.load(os.path.join("run/logs/cifar10", 'checkpoint.pth'), map_location=self.config.device)
+        else:
+            raise NotImplementedError('dataset {} ckpt not found'.format(self.config.data.dataset))
+
         basescore.load_state_dict(states[0])
         for p in basescore.parameters():
             p.requires_grad_(False)
@@ -241,7 +248,7 @@ class ScoreCorrectRunner():
                     noise = torch.randn_like(x_mod) * np.sqrt(step_size * 2)
                     grad = basescorenet(x_mod, labels) - resscorenet(x_mod, labels)/lam
                     x_mod = x_mod + step_size * grad + noise
-                    print("class: {}, step_size: {}, mean {}, max {}".format(c, step_size, grad.abs().mean(),grad.abs().max()))
+                    # print("class: {}, step_size: {}, mean {}, max {}".format(c, step_size, grad.abs().mean(),grad.abs().max()))
 
             if denoise:
                 x_mod = x_mod + step_size * (basescorenet(x_mod, labels) - resscorenet(x_mod, labels)/lam)
