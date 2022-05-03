@@ -25,7 +25,7 @@ class ScoreCorrectRunner():
     def __init__(self, args, config):
         self.args = args
         self.config = config
-        args.log_sample_path = os.path.join(args.log_path, 'samples')
+        args.log_sample_path = os.path.join(args.log, 'samples')
         os.makedirs(args.log_sample_path, exist_ok=True)
 
     def get_optimizer(self, parameters):
