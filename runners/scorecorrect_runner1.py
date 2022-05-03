@@ -18,6 +18,7 @@ from models.cond_refinenet_dilated import CondRefineNetDilated, init_net
 from torchvision.utils import save_image, make_grid
 from PIL import Image
 import matplotlib.pyplot as plt
+from evaluation.fid_score import get_fid, get_fid_stats_path
 
 __all__ = ['ScoreCorrectRunner']
 
@@ -244,6 +245,133 @@ class ScoreCorrectRunner():
 
                     del imgs
                     del all_samples
+
+    def sample(self):
+        basescore = CondRefineNetDilated(self.config).to(self.config.device)
+        basescore = torch.nn.DataParallel(basescore)
+
+        if self.config.data.dataset == 'MNIST':
+            states = torch.load(os.path.join("run/logs/mnist", 'checkpoint.pth'), map_location=self.config.device)
+        elif self.config.data.dataset == 'CIFAR10':
+            states = torch.load(os.path.join("run/logs/cifar10", 'checkpoint.pth'), map_location=self.config.device)
+        else:
+            raise NotImplementedError('dataset {} ckpt not found'.format(self.config.data.dataset))
+
+        basescore.load_state_dict(states[0])
+        for p in basescore.parameters():
+            p.requires_grad_(False)
+        basescore.eval()
+        print(" base score loaded")
+
+
+        if self.config.sampling.ckpt_id is None:
+            states = torch.load(os.path.join(self.args.log, 'checkpoint.pth'), map_location=self.config.device)
+        else:
+            states = torch.load(os.path.join(self.args.log, f'checkpoint_{self.config.sampling.ckpt_id}.pth'),
+                                map_location=self.config.device)
+
+        score = CondRefineNetDilated(self.config).to(self.config.device)
+        score = torch.nn.DataParallel(score)
+
+        score.load_state_dict(states[0], strict=True)
+
+        sigmas = torch.tensor(np.exp(np.linspace(np.log(self.config.model.sigma_begin), np.log(self.config.model.sigma_end),self.config.model.num_classes))).float().to(self.config.device)
+        score.eval()
+        print('res score loaded')
+
+        total_n_samples = self.config.sampling.num_samples4fid
+        n_rounds = total_n_samples // self.config.sampling.batch_size
+
+        img_id = 0
+        for _ in tqdm.tqdm(range(n_rounds), desc='Generating image samples for FID/inception score evaluation'):
+            samples = torch.rand(self.config.sampling.batch_size, self.config.data.channels,
+                                  self.config.data.image_size,
+                                  self.config.data.image_size, device=self.config.device)
+            if self.config.data.logit_transform:
+                samples = torch.sigmoid(samples)                                  
+
+            all_samples = self.anneal_Langevin_caliberation(samples, basescore, score, sigmas.cpu().numpy(), self.config.training.lam,
+                                                    self.config.sampling.n_steps_each,
+                                                    self.config.sampling.step_lr, verbose=False,
+                                                    denoise=self.config.sampling.denoise)
+
+            samples = all_samples[-1]
+
+            for img in samples:
+                if self.config.data.logit_transform:
+                    img = torch.sigmoid(img)
+                save_image(img, os.path.join(self.args.image_folder, 'image_{}.png'.format(img_id)))
+                img_id += 1
+
+    def fast_fid(self):
+        ### Test the fids of ensembled checkpoints.
+        ### Shouldn't be used for models with ema
+        basescore = CondRefineNetDilated(self.config).to(self.config.device)
+        basescore = torch.nn.DataParallel(basescore)
+
+        if self.config.data.dataset == 'MNIST':
+            states = torch.load(os.path.join("run/logs/mnist", 'checkpoint.pth'), map_location=self.config.device)
+        elif self.config.data.dataset == 'CIFAR10':
+            states = torch.load(os.path.join("run/logs/cifar10", 'checkpoint.pth'), map_location=self.config.device)
+        else:
+            raise NotImplementedError('dataset {} ckpt not found'.format(self.config.data.dataset))
+
+        basescore.load_state_dict(states[0])
+        for p in basescore.parameters():
+            p.requires_grad_(False)
+        basescore.eval()
+        print(" base score loaded")
+
+        import pickle
+        score = CondRefineNetDilated(self.config).to(self.config.device)
+        score = torch.nn.DataParallel(score)
+
+        sigmas = torch.tensor(np.exp(np.linspace(np.log(self.config.model.sigma_begin), np.log(self.config.model.sigma_end),self.config.model.num_classes))).float().to(self.config.device)
+
+
+        fids = {}
+        for ckpt in tqdm.tqdm(range(self.config.fast_fid.begin_ckpt, self.config.fast_fid.end_ckpt + 1, 5000),
+                              desc="processing ckpt"):
+            states = torch.load(os.path.join(self.args.log, f'checkpoint_{ckpt}.pth'),
+                                map_location=self.config.device)
+
+
+            score.load_state_dict(states[0])
+
+            score.eval()
+
+            num_iters = self.config.fast_fid.num_samples // self.config.fast_fid.batch_size
+            output_path = os.path.join(self.args.image_folder, 'ckpt_{}'.format(ckpt))
+            os.makedirs(output_path, exist_ok=True)
+            for i in range(num_iters):
+                samples = torch.rand(self.config.sampling.batch_size, self.config.data.channels,
+                                      self.config.data.image_size,
+                                      self.config.data.image_size, device=self.config.device)
+                if self.config.data.logit_transform:
+                    samples = torch.sigmoid(samples)                                  
+
+                all_samples = self.anneal_Langevin_caliberation(samples, basescore, score, sigmas.cpu().numpy(), self.config.training.lam,
+                                                        self.config.sampling.n_steps_each,
+                                                        self.config.sampling.step_lr, verbose=False,
+                                                        denoise=self.config.sampling.denoise)
+                final_samples = all_samples[-1]
+                for id, sample in enumerate(final_samples):
+                    sample = sample.view(self.config.data.channels,
+                                         self.config.data.image_size,
+                                         self.config.data.image_size)
+
+                    if self.config.data.logit_transform:
+                        sample = torch.sigmoid(sample)   
+
+                    save_image(sample, os.path.join(output_path, 'sample_{}.png'.format(id)))
+
+            stat_path = get_fid_stats_path(self.args, self.config, download=True)
+            fid = get_fid(stat_path, output_path)
+            fids[ckpt] = fid
+            print("ckpt: {}, fid: {}".format(ckpt, fid))
+
+        with open(os.path.join(self.args.image_folder, 'fids.pickle'), 'wb') as handle:
+            pickle.dump(fids, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     def anneal_Langevin_caliberation(self, x_mod, basescorenet, resscorenet, sigmas, lam, n_steps_each=100, step_lr=0.00002,denoise=True):
         images = []
