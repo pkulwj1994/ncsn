@@ -14,7 +14,7 @@ from torchvision.datasets import MNIST, CIFAR10, SVHN
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, Subset
 from datasets.celeba import CelebA
-from models.cond_refinenet_dilated import CondRefineNetDilated
+from models.cond_refinenet_dilated import CondRefineNetDilated, init_net
 from torchvision.utils import save_image, make_grid
 from PIL import Image
 
@@ -137,6 +137,11 @@ class ScoreCorrectRunner():
         ## initialize score
         score = CondRefineNetDilated(self.config).to(self.config.device)
         score = torch.nn.DataParallel(score)
+
+        if self.config.training.zero_init:
+            score = init_net(score, 'zero')
+            print("score model weights zero init")
+            
         print('score model initialized')
 
         optimizer = self.get_optimizer(score.parameters())
