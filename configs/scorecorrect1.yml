@@ -8,6 +8,7 @@ training:
   algo: 'dsm'
   anneal_power: 2.0
   lam: 1.0
+  zero_init: true
 
 data:
   ## mnist
@@ -51,3 +52,4 @@ sampling:
   denoise: true
   n_steps_each: 100
   step_lr: 0.00002
+
