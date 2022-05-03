@@ -17,6 +17,7 @@ from datasets.celeba import CelebA
 from models.cond_refinenet_dilated import CondRefineNetDilated, init_net
 from torchvision.utils import save_image, make_grid
 from PIL import Image
+import matplotlib.pyplot as plt
 
 __all__ = ['ScoreCorrectRunner']
 
@@ -157,7 +158,7 @@ class ScoreCorrectRunner():
             np.exp(np.linspace(np.log(self.config.model.sigma_begin), np.log(self.config.model.sigma_end),
                                self.config.model.num_classes))).float().to(self.config.device)
 
-
+        losses = []
         for epoch in range(self.config.training.n_epochs):
             for i, (X, y) in enumerate(dataloader):
                 step += 1
@@ -180,6 +181,7 @@ class ScoreCorrectRunner():
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+                losses.append(loss.item())
 
                 tb_logger.add_scalar('loss', loss, global_step=step)
                 logging.info("step: {}, loss: {}".format(step, loss.item()))
@@ -221,6 +223,9 @@ class ScoreCorrectRunner():
                     image_grid = make_grid(sample, 6)
                     save_image(image_grid,os.path.join(self.args.log_sample_path, 'image_grid_{}.png'.format(step)))
                     torch.save(sample, os.path.join(self.args.log_sample_path, 'samples_{}.pth'.format(step)))
+
+                    plt.plot(losses)
+                    plt.savefig(os.path.join(self.args.log_sample_path, '{}_{}_losses.png'.format(self.config.training.algo, self.config.data.dataset)))
 
                     # making gif
                     imgs = []
