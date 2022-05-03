@@ -5,7 +5,7 @@ training:
   ngpu: 1
 #   snapshot_freq: 5000
   snapshot_freq: 100
-  algo: 'dsm'
+  algo: 'ssc' # options = ['dsm', 'ssm', 'ssc']
   anneal_power: 2.0
   lam: 1.0
   zero_init: true
@@ -52,4 +52,3 @@ sampling:
   denoise: true
   n_steps_each: 100
   step_lr: 0.00002
-
