@@ -275,15 +275,15 @@ class ScoreCorrectRunner():
         score = torch.nn.DataParallel(score)
 
         score.load_state_dict(states[0], strict=True)
+        print('res score loaded')
         score.eval()
-
 
         if self.config.sampling.no_caliberation:
           score = lambda X,labels: torch.zeros_like(X)
           print('non caliberation fid')
 
         sigmas = torch.tensor(np.exp(np.linspace(np.log(self.config.model.sigma_begin), np.log(self.config.model.sigma_end),self.config.model.num_classes))).float().to(self.config.device)
-        print('res score loaded')
+        
 
         total_n_samples = self.config.sampling.num_samples4fid
         n_rounds = total_n_samples // self.config.sampling.batch_size
