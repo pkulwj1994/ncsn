@@ -52,3 +52,6 @@ sampling:
   denoise: true
   n_steps_each: 100
   step_lr: 0.00002
+  ckpt_id: 0
+  num_samples4fid: 128
+  batch_size: 128
