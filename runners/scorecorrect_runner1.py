@@ -275,6 +275,10 @@ class ScoreCorrectRunner():
 
         score.load_state_dict(states[0], strict=True)
 
+        if self.config.sampling.no_caliberation:
+          score = lambda X,labels: torch.zeros_like(X)
+          print('non caliberation fid')
+
         sigmas = torch.tensor(np.exp(np.linspace(np.log(self.config.model.sigma_begin), np.log(self.config.model.sigma_end),self.config.model.num_classes))).float().to(self.config.device)
         score.eval()
         print('res score loaded')
@@ -325,6 +329,10 @@ class ScoreCorrectRunner():
         import pickle
         score = CondRefineNetDilated(self.config).to(self.config.device)
         score = torch.nn.DataParallel(score)
+
+        if self.config.fast_fid.no_caliberation:
+          score = lambda X,labels: torch.zeros_like(X)
+          print('non caliberation fid')
 
         sigmas = torch.tensor(np.exp(np.linspace(np.log(self.config.model.sigma_begin), np.log(self.config.model.sigma_end),self.config.model.num_classes))).float().to(self.config.device)
 
