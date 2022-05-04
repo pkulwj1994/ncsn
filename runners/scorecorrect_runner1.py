@@ -181,7 +181,8 @@ class ScoreCorrectRunner():
 
                 optimizer.zero_grad()
                 loss.backward()
-                optimizer.step()
+                if step > 1:
+                    optimizer.step()
                 losses.append(loss.item())
 
                 tb_logger.add_scalar('loss', loss, global_step=step)
@@ -301,11 +302,25 @@ class ScoreCorrectRunner():
 
             samples = all_samples[-1]
 
+            if self.config.data.logit_transform:
+                samples = torch.sigmoid(samples)
+
+            if self.config.sampling.snapshot:
+                image_grid = make_grid(samples, int(np.sqrt(samples.shape[0])))
+                save_image(image_grid,os.path.join(self.args.image_folder, 'image_grid_snapshot.png'))
+                return 0
+
             for img in samples:
                 if self.config.data.logit_transform:
                     img = torch.sigmoid(img)
                 save_image(img, os.path.join(self.args.image_folder, 'image_{}.png'.format(img_id)))
                 img_id += 1
+
+        if self.config.sampling.fid:
+            stat_path = get_fid_stats_path(self.args, self.config, download=True)
+            fid = get_fid(stat_path, self.args.image_folder)
+            print("ckpt: {}, fid: {}".format(self.config.sampling.ckpt_id, fid))
+
 
     def fast_fid(self):
         ### Test the fids of ensembled checkpoints.
@@ -330,10 +345,6 @@ class ScoreCorrectRunner():
         score = CondRefineNetDilated(self.config).to(self.config.device)
         score = torch.nn.DataParallel(score)
 
-        if self.config.fast_fid.no_caliberation:
-          score = lambda X,labels: torch.zeros_like(X)
-          print('non caliberation fid')
-
         sigmas = torch.tensor(np.exp(np.linspace(np.log(self.config.model.sigma_begin), np.log(self.config.model.sigma_end),self.config.model.num_classes))).float().to(self.config.device)
 
 
@@ -343,10 +354,12 @@ class ScoreCorrectRunner():
             states = torch.load(os.path.join(self.args.log, f'checkpoint_{ckpt}.pth'),
                                 map_location=self.config.device)
 
-
-            score.load_state_dict(states[0])
-
-            score.eval()
+            if self.config.fast_fid.no_caliberation:
+                score = lambda X,labels: torch.zeros_like(X)
+                print('non caliberation fid')
+            else:
+                score.load_state_dict(states[0])
+                score.eval()
 
             num_iters = self.config.fast_fid.num_samples // self.config.fast_fid.batch_size
             output_path = os.path.join(self.args.image_folder, 'ckpt_{}'.format(ckpt))
@@ -363,6 +376,7 @@ class ScoreCorrectRunner():
                                                         self.config.sampling.step_lr,
                                                         denoise=self.config.sampling.denoise)
                 final_samples = all_samples[-1]
+
                 for id, sample in enumerate(final_samples):
                     sample = sample.view(self.config.data.channels,
                                          self.config.data.image_size,
@@ -372,6 +386,7 @@ class ScoreCorrectRunner():
                         sample = torch.sigmoid(sample)   
 
                     save_image(sample, os.path.join(output_path, 'sample_{}.png'.format(id)))
+
 
             stat_path = get_fid_stats_path(self.args, self.config, download=True)
             fid = get_fid(stat_path, output_path)
