@@ -21,7 +21,8 @@ def parse_args_and_config():
     parser.add_argument('--doc', type=str, default='0', help='A string for documentation purpose')
     parser.add_argument('--comment', type=str, default='', help='A string for experiment comment')
     parser.add_argument('--verbose', type=str, default='info', help='Verbose level: info | debug | warning | critical')
-    parser.add_argument('--test', action='store_true', help='Whether to test the model')
+    parser.add_argument('--sample', action='store_true', help='Whether to sample from the model')
+    parser.add_argument('--fast_fid', action='store_true', help='Whether to test the fid')
     parser.add_argument('--resume_training', action='store_true', help='Whether to resume training')
     parser.add_argument('-o', '--image_folder', type=str, default='images', help="The directory of image outputs")
 
@@ -32,7 +33,7 @@ def parse_args_and_config():
     args.log = os.path.join(args.run, 'logs', args.doc)
 
     # parse config file
-    if not args.test:
+    if not args.sample and not args.fast_fid:
         with open(os.path.join('configs', args.config), 'r') as f:
             config = yaml.load(f)
         new_config = dict2namespace(config)
@@ -41,7 +42,7 @@ def parse_args_and_config():
             config = yaml.load(f)
         new_config = config
 
-    if not args.test:
+    if not args.sample and not args.fast_fid:
         if not args.resume_training:
             if os.path.exists(args.log):
                 shutil.rmtree(args.log)
@@ -76,6 +77,47 @@ def parse_args_and_config():
         logger = logging.getLogger()
         logger.addHandler(handler1)
         logger.setLevel(level)
+
+        if args.sample:
+            os.makedirs(os.path.join(args.run, 'image_samples'), exist_ok=True)
+            args.image_folder = os.path.join(args.run, 'image_samples', args.image_folder)
+            if not os.path.exists(args.image_folder):
+                os.makedirs(args.image_folder)
+            else:
+                overwrite = True
+                # if args.ni:
+                #     overwrite = True
+                # else:
+                #     response = input("Image folder already exists. Overwrite? (Y/N)")
+                #     if response.upper() == 'Y':
+                #         overwrite = True
+
+                if overwrite:
+                    shutil.rmtree(args.image_folder)
+                    os.makedirs(args.image_folder)
+                else:
+                    print("Output image folder exists. Program halted.")
+                    sys.exit(0)
+
+        elif args.fast_fid:
+            os.makedirs(os.path.join(args.run, 'fid_samples'), exist_ok=True)
+            args.image_folder = os.path.join(args.run, 'fid_samples', args.image_folder)
+            if not os.path.exists(args.image_folder):
+                os.makedirs(args.image_folder)
+            else:
+                overwrite = True
+                # if args.ni:
+                #     overwrite = False
+                # else:
+                #     response = input("Image folder already exists. \n "
+                #                      "Type Y to delete and start from an empty folder?\n"
+                #                      "Type N to overwrite existing folders (Y/N)")
+                #     if response.upper() == 'Y':
+                #         overwrite = True
+
+                if overwrite:
+                    shutil.rmtree(args.image_folder)
+                    os.makedirs(args.image_folder)
 
     # add device
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -116,14 +158,14 @@ def main():
 
     try:
         runner = eval(args.runner)(args, config)
-        if not args.sample and not args.fast_fid:
-            runner.train()
-        elif args.sample:
+
+        if args.sample:
             runner.sample()
         elif args.fast_fid:
             runner.fast_fid()
         else:
-            return 0
+            runner.train()
+
     except:
         logging.error(traceback.format_exc())
 
