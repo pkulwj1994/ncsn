@@ -239,7 +239,7 @@ links = {
 
 def get_fid_stats_path(args, config, download=True):
     if config.data.dataset == 'CIFAR10':
-        path = os.path.join(args.exp, 'datasets', 'cifar10_fid.npz')
+        path = os.path.join(args.run, 'datasets', 'cifar10_fid.npz')
         if not os.path.exists(path):
             if not download:
                 raise FileNotFoundError("no statistics file founded")
@@ -249,7 +249,7 @@ def get_fid_stats_path(args, config, download=True):
                     links[config.data.dataset], path
                 )
     elif config.data.dataset == 'CELEBA':
-        path = os.path.join(args.exp, 'datasets', 'celeba_test_fid_stats.npz')
+        path = os.path.join(args.run, 'datasets', 'celeba_test_fid_stats.npz')
         if not os.path.exists(path):
             raise FileNotFoundError('no statistics file founded')
 
