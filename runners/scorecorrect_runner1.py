@@ -292,7 +292,7 @@ class ScoreCorrectRunner():
 
             all_samples = self.anneal_Langevin_caliberation(samples, basescore, score, sigmas.cpu().numpy(), self.config.training.lam,
                                                     self.config.sampling.n_steps_each,
-                                                    self.config.sampling.step_lr, verbose=False,
+                                                    self.config.sampling.step_lr,
                                                     denoise=self.config.sampling.denoise)
 
             samples = all_samples[-1]
