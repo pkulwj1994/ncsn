@@ -116,10 +116,14 @@ def main():
 
     try:
         runner = eval(args.runner)(args, config)
-        if not args.test:
+        if not args.sample and not args.fast_fid:
             runner.train()
+        elif args.sample:
+            runner.sample()
+        elif args.fast_fid:
+            runner.fast_fid()
         else:
-            runner.test()
+            return 0
     except:
         logging.error(traceback.format_exc())
 
