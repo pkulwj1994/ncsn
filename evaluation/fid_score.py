@@ -236,6 +236,10 @@ links = {
     'CIFAR10': 'http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_cifar10_train.npz',
     'LSUN': 'http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_lsun_train.npz'
 }
+# http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_celeba.npz
+# http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_svhn_train.npz
+# http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_imagenet_train.npz
+# http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_imagenet_valid.npz
 
 def get_fid_stats_path(args, config, download=True):
     if config.data.dataset == 'CIFAR10':
