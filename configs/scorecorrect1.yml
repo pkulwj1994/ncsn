@@ -55,3 +55,9 @@ sampling:
   ckpt_id: 0
   num_samples4fid: 128
   batch_size: 128
+
+fast_fid:
+  begin_ckpt: 0
+  end_ckpt: 0
+  num_samples: 128
+  batch_size: 128
