@@ -181,7 +181,7 @@ class ScoreCorrectRunner():
 
                 optimizer.zero_grad()
                 loss.backward()
-                if step > 1:
+                if step > 0:
                     optimizer.step()
                 losses.append(loss.item())
 
