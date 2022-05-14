@@ -235,6 +235,34 @@ class FloppCorrectRunner():
                     ]
                     # torch.save(states, os.path.join(self.args.log, 'checkpoint_{}.pth'.format(step)))
                     torch.save(states, os.path.join(self.args.log, 'checkpoint.pth'))
+                    
+                    # visualize and save
+                    grid_size = 6
+                    if not os.path.exists(self.args.image_folder):
+                        os.makedirs(self.args.image_folder)
+                    score.eval()
+                    flow_net.eval()
+
+                    imgs = []
+                    if self.config.data.dataset == 'MNIST' or self.config.data.dataset == 'FashionMNIST':
+                        samples = torch.rand(grid_size**2, 1, self.config.data.image_size, self.config.data.image_size,device=self.config.device)
+                    else: 
+                        samples = torch.rand(grid_size**2, 3, self.config.data.image_size, self.config.data.image_size,device=self.config.device)
+
+                    all_samples = self.Langevin_dynamics_flowscore(samples,flow_net, score, 1000, 0.00002)
+
+                    for i, sample in enumerate(tqdm.tqdm(all_samples, total=len(all_samples), desc='saving images')):
+                        sample = sample.view(grid_size ** 2, self.config.data.channels, self.config.data.image_size,
+                                             self.config.data.image_size)
+                        if self.config.data.logit_transform:
+                            sample = torch.sigmoid(sample)
+                        if i % 10 == 0:
+                            im = Image.fromarray(image_grid.mul_(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to('cpu', torch.uint8).numpy())
+                            imgs.append(im)
+
+                    image_grid = make_grid(all_samples[-1], nrow=grid_size)
+                    save_image(image_grid, os.path.join(self.args.image_folder, 'image_{}.png'.format(step)))
+                    imgs[0].save("movie.gif", save_all=True, append_images= imgs[1:], duration=1, loop=0)
 
     def Langevin_dynamics_flowscore(self, x_mod, flow, resscore, n_steps=1000, step_lr=0.00002):
         images = []
@@ -251,151 +279,3 @@ class FloppCorrectRunner():
             # print("modulus of grad components: mean {}, max {}".format(grad.abs().mean(), grad.abs().max()))
 
             return images
-
-    def test(self,score=None,iters=None):
-        if not score:
-            states = torch.load(os.path.join(self.args.log, 'checkpoint.pth'), map_location=self.config.device)
-            score = RefineNetDilated(self.config).to(self.config.device)
-            score = torch.nn.DataParallel(score)
-
-            score.load_state_dict(states[0])
-
-        grid_size = 5
-        
-        if not os.path.exists(self.args.image_folder):
-            os.makedirs(self.args.image_folder)
-
-
-
-        score.eval()
-
-        imgs = []
-        if self.config.data.dataset == 'MNIST' or self.config.data.dataset == 'FashionMNIST':
-            transform = transforms.Compose([
-                transforms.Resize(self.config.data.image_size),
-                transforms.ToTensor()
-            ])
-
-            if self.config.data.dataset == 'MNIST':
-                dataset = MNIST(os.path.join(self.args.run, 'datasets', 'mnist'), train=True, download=True,
-                                transform=transform)
-            else:
-                dataset = FashionMNIST(os.path.join(self.args.run, 'datasets', 'fmnist'), train=True, download=True,
-                                       transform=transform)
-
-            dataloader = DataLoader(dataset, batch_size=100, shuffle=True, num_workers=4)
-            data_iter = iter(dataloader)
-            samples, _ = next(data_iter)
-            samples = samples.cuda()
-
-            samples = torch.rand(grid_size**2, 1, self.config.data.image_size, self.config.data.image_size,
-                                 device=self.config.device)
-            all_samples = self.Langevin_dynamics(samples, score, 1000, 0.00002)
-
-            for i, sample in enumerate(tqdm.tqdm(all_samples, total=len(all_samples), desc='saving images')):
-                sample = sample.view(grid_size ** 2, self.config.data.channels, self.config.data.image_size,
-                                     self.config.data.image_size)
-
-                if self.config.data.logit_transform:
-                    sample = torch.sigmoid(sample)
-
-                image_grid = make_grid(sample, nrow=grid_size)
-                if i % 10 == 0:
-                    im = Image.fromarray(image_grid.mul_(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to('cpu', torch.uint8).numpy())
-                    imgs.append(im)
-
-                save_image(image_grid, os.path.join(self.args.image_folder, 'image_{}.png'.format(i)))
-                torch.save(sample, os.path.join(self.args.image_folder, 'image_raw_{}.pth'.format(i)))
-
-
-
-        elif self.config.data.dataset == 'CELEBA':
-            dataset = CelebA(root=os.path.join(self.args.run, 'datasets', 'celeba'), split='test',
-                             transform=transforms.Compose([
-                                 transforms.CenterCrop(140),
-                                 transforms.Resize(self.config.data.image_size),
-                                 transforms.ToTensor(),
-                             ]), download=True)
-
-            dataloader = DataLoader(dataset, batch_size=64, shuffle=True, num_workers=4)
-            samples, _ = next(iter(dataloader))
-
-            samples = torch.rand(grid_size ** 2, 3, self.config.data.image_size, self.config.data.image_size,
-                                 device=self.config.device)
-
-            all_samples = self.Langevin_dynamics(samples, score, 1000, 0.00002)
-
-            # for i, sample in enumerate(tqdm.tqdm(all_samples)):
-            #     sample = sample.view(100, self.config.data.channels, self.config.data.image_size,
-            #                          self.config.data.image_size)
-
-            #     if self.config.data.logit_transform:
-            #         sample = torch.sigmoid(sample)
-
-            #     torch.save(sample, os.path.join(self.args.image_folder, 'samples_{}.pth'.format(i)))
-
-
-            for i, sample in enumerate(tqdm.tqdm(all_samples, total=len(all_samples), desc='saving images')):
-                sample = sample.view(grid_size ** 2, self.config.data.channels, self.config.data.image_size,
-                                     self.config.data.image_size)
-
-                if self.config.data.logit_transform:
-                    sample = torch.sigmoid(sample)
-
-                image_grid = make_grid(sample, nrow=grid_size)
-                if i % 10 == 0:
-                    im = Image.fromarray(image_grid.mul_(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to('cpu', torch.uint8).numpy())
-                    imgs.append(im)
-
-                save_image(image_grid, os.path.join(self.args.image_folder, 'image_{}.png'.format(i)), nrow=10)
-                torch.save(sample, os.path.join(self.args.image_folder, 'image_raw_{}.pth'.format(i)))
-
-        else:
-            transform = transforms.Compose([
-                transforms.Resize(self.config.data.image_size),
-                transforms.ToTensor()
-            ])
-
-            if self.config.data.dataset == 'CIFAR10':
-                dataset = CIFAR10(os.path.join(self.args.run, 'datasets', 'cifar10'), train=True, download=True,
-                                  transform=transform)
-
-            dataloader = DataLoader(dataset, batch_size=grid_size ** 2, shuffle=True, num_workers=4)
-            data_iter = iter(dataloader)
-            samples, _ = next(data_iter)
-            samples = samples.cuda()
-            samples = torch.rand_like(samples)
-
-            # all_samples = self.Langevin_dynamics(samples, score, 1000, 0.00002)
-
-            # for i, sample in enumerate(tqdm.tqdm(all_samples)):
-            #     sample = sample.view(100, self.config.data.channels, self.config.data.image_size,
-            #                          self.config.data.image_size)
-
-            #     if self.config.data.logit_transform:
-            #         sample = torch.sigmoid(sample)
-
-            #     torch.save(sample, os.path.join(self.args.image_folder, 'samples_{}.pth'.format(i)))
-
-
-            for i, sample in enumerate(tqdm.tqdm(all_samples, total=len(all_samples), desc='saving images')):
-                sample = sample.view(grid_size ** 2, self.config.data.channels, self.config.data.image_size,
-                                     self.config.data.image_size)
-
-                if self.config.data.logit_transform:
-                    sample = torch.sigmoid(sample)
-
-                image_grid = make_grid(sample, nrow=grid_size)
-                if i % 10 == 0:
-                    im = Image.fromarray(image_grid.mul_(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to('cpu', torch.uint8).numpy())
-                    imgs.append(im)
-
-                save_image(image_grid, os.path.join(self.args.image_folder, 'image_{}.png'.format(i)), nrow=10)
-                torch.save(sample, os.path.join(self.args.image_folder, 'image_raw_{}.pth'.format(i)))
-            
-        # imgs[0].save(os.path.join(self.args.image_folder, "movie.gif"), save_all=True, append_images=imgs[1:], duration=1, loop=0)
-        shutil.rmtree(self.args.image_folder)
-        if iters:
-            imgs[0].save("{}_movie.gif".format(iters), save_all=True, append_images=imgs[1:], duration=1, loop=0)
-        else:
-            imgs[0].save("movie.gif", save_all=True, append_images=imgs[1:], duration=1, loop=0)
