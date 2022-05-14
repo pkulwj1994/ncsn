@@ -80,13 +80,10 @@ class FloppCorrectRunner():
         if self.config.data.dataset == 'CIFAR10':
             dataset = CIFAR10(os.path.join(self.args.run, 'datasets', 'cifar10'), train=True, download=True,
                               transform=tran_transform)
-            # test_dataset = CIFAR10(os.path.join(self.args.run, 'datasets', 'cifar10_test'), train=False, download=True,
-            #                        transform=test_transform)
+
         elif self.config.data.dataset == 'MNIST':
             dataset = MNIST(os.path.join(self.args.run, 'datasets', 'mnist'), train=True, download=True,
                             transform=tran_transform)
-            # test_dataset = MNIST(os.path.join(self.args.run, 'datasets', 'mnist_test'), train=False, download=True,
-            #                      transform=test_transform)
 
         elif self.config.data.dataset == 'CELEBA':
             if self.config.data.random_flip:
@@ -130,6 +127,16 @@ class FloppCorrectRunner():
         flow_net = flow_net.to(self.config.device)
         flow_net = torch.nn.DataParallel(flow_net)
         cudnn.benchmark = True
+
+        if self.args.pretrained_flow:
+            file_name = "flow_ckpt/cifar10.pth.tar"
+            flow_net.load_state_dict(torch.load(file_name)['net'])
+            print("Load pretrained flow model from {}".format(file_name))
+            
+            for p in flow_net.parameters():
+              p.requires_grad_(False)
+            print('flow set to no training ')
+            
         
         loss_fn = util.NLLLoss().to(self.config.device)
         flow_param_groups = util.get_param_groups(flow_net, self.config.flow_training.weight_decay, norm_suffix='weight_g')
@@ -141,9 +148,7 @@ class FloppCorrectRunner():
         
             
         score = RefineNetDilated(self.config).to(self.config.device)
-
         score = torch.nn.DataParallel(score)
-
         optimizer = self.get_optimizer(score.parameters())
 
         if self.args.resume_training:
@@ -169,37 +174,39 @@ class FloppCorrectRunner():
                 X = X / 256. * 255. + torch.rand_like(X) / 256.
                 if self.config.data.logit_transform:
                     X = self.logit_transform(X)
-                    
-                if epoch == 0 and step < 200:
-                    if count == -1:
-                        print('Data dependent initialization for flow parameter at the begining of training')
-                    x_list.append(X.clone()) # use more data to do data dependent initialization
-                    if len(x_list) >= 20:
-                        x_list = torch.cat(x_list, dim=0)
-                        with torch.no_grad():
-                            flow_net(x_list.detach(), reverse=False)
-                        x_list = []
-                    count += 1
-                    if count == 199:
-                        print('Begin training')
-                    continue
-                    
-                flow_optimizer.zero_grad()
-                z, sldj = flow_net(X.detach(), reverse=False)
-                loss = loss_fn(z, sldj)
-                loss.backward()
-                if self.config.flow_training.max_grad_norm > 0:
-                    util.clip_grad_norm(flow_optimizer, self.config.flow_training.max_grad_norm)
-                    
-                flow_optimizer.step()
-                flow_scheduler.step(step*self.config.training.batch_size)
-                flow_losses.append(loss.item())
+
+                # if flow pretrained, no training for flow    
+                if not self.args.pretrained_flow:
+                    if epoch == 0 and step < 200:
+                        if count == -1:
+                            print('Data dependent initialization for flow parameter at the begining of training')
+                        x_list.append(X.clone()) # use more data to do data dependent initialization
+                        if len(x_list) >= 20:
+                            x_list = torch.cat(x_list, dim=0)
+                            with torch.no_grad():
+                                flow_net(x_list.detach(), reverse=False)
+                            x_list = []
+                        count += 1
+                        if count == 199:
+                            print('Begin training')
+                        continue
+                        
+                    flow_optimizer.zero_grad()
+                    z, sldj = flow_net(X.detach(), reverse=False)
+                    loss = loss_fn(z, sldj)
+                    loss.backward()
+                    if self.config.flow_training.max_grad_norm > 0:
+                        util.clip_grad_norm(flow_optimizer, self.config.flow_training.max_grad_norm)
+                        
+                    flow_optimizer.step()
+                    flow_scheduler.step(step*self.config.training.batch_size)
+                    flow_losses.append(loss.item())
                 
                 # train residual score
                 
                 flow_net.eval()
-                for p in flow_net.parameters():
-                    p.requires_grad_(False)
+                # for p in flow_net.parameters():
+                #     p.requires_grad_(False)
                     
                 X.requires_grad_(True)
                 total_score = lambda X: torch.autograd.grad(self.compute_loglike(flow_net, X).sum(), X, retain_graph=True, create_graph=True)[0] - score(X)/self.config.training.lam
@@ -212,8 +219,8 @@ class FloppCorrectRunner():
                 sbm_losses.append(loss.item())
                 
                 flow_net.train()
-                for p in flow_net.parameters():
-                    p.requires_grad_(True)
+                # for p in flow_net.parameters():
+                #     p.requires_grad_(True)
 
                 tb_logger.add_scalar('loss', loss, global_step=step)
                 logging.info("step: {}, flow_loss: {},stein loss: {}".format(step, flow_losses[-1], sbm_losses[-1]))
@@ -306,4 +313,3 @@ class FloppCorrectRunner():
             # print("modulus of grad components: mean {}, max {}".format(grad.abs().mean(), grad.abs().max()))
 
         return images
-
