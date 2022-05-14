@@ -7,7 +7,7 @@ training:
   algo: 'dsm'
   n_particles: 1
   anneal_power: 2.0
-  l2_lambda: 10.0
+  lam: 1.0
   
 flow_training:
   batch_size: 128
