@@ -231,8 +231,8 @@ class FloppCorrectRunner():
                     
                     # visualize and save
                     grid_size = 4
-                    if not os.path.exists(self.args.image_folder):
-                        os.makedirs(self.args.image_folder)
+                    if not os.path.exists(self.args.log):
+                        os.makedirs(self.args.log)
                     score.eval()
                     flow_net.eval()
 
@@ -255,7 +255,7 @@ class FloppCorrectRunner():
                             imgs.append(im)
 
                     image_grid = make_grid(all_samples[-1], nrow=grid_size)
-                    save_image(image_grid, os.path.join(self.args.image_folder, 'image_{}.png'.format(step)))
+                    save_image(image_grid, os.path.join(self.args.log, 'image_{}.png'.format(step)))
                     imgs[0].save("movie.gif", save_all=True, append_images= imgs[1:], duration=1, loop=0)
 
     def Langevin_dynamics_flowscore(self, x_mod, flow, resscore, n_steps=1000, step_lr=0.00002):
