@@ -242,6 +242,7 @@ class FloppCorrectRunner():
                     else: 
                         samples = torch.rand(grid_size**2, 3, self.config.data.image_size, self.config.data.image_size,device=self.config.device)
 
+                    samples =  self.sample_flow(flow_net, 9, self.config.device).detach()
                     all_samples = self.Langevin_dynamics_flowscore(samples, flow_net, score, 30, 0.04)
 
                     for i, sample in enumerate(all_samples):
@@ -256,7 +257,18 @@ class FloppCorrectRunner():
 
                     image_grid = make_grid(all_samples[-1], nrow=grid_size)
                     save_image(image_grid, os.path.join(self.args.log, 'image_{}.png'.format(step)))
+
+                    image_grid = make_grid(all_samples[0], nrow=grid_size)
+                    save_image(image_grid, os.path.join(self.args.log, 'flow_image_{}.png'.format(step)))
                     imgs[0].save("movie.gif", save_all=True, append_images= imgs[1:], duration=1, loop=0)
+    @torch.no_grad()
+    def sample_flow(self, net, batch_size, device):
+
+        z = torch.randn((batch_size, 3, 32, 32), dtype=torch.float32, device=device)
+        x, _ = net(z, reverse=True)
+        x = 2.0 * torch.sigmoid(x) - 1.0
+
+        return x
 
     def Langevin_dynamics_flowscore(self, x_mod, flow, resscore, n_steps=1000, step_lr=0.00002):
         images = []
@@ -272,4 +284,4 @@ class FloppCorrectRunner():
             x_mod.data.add_(step_lr*grad + noise)
             # print("modulus of grad components: mean {}, max {}".format(grad.abs().mean(), grad.abs().max()))
 
-            return images
+        return images
