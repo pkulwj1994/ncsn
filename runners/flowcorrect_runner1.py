@@ -252,6 +252,7 @@ class FloppCorrectRunner():
                     else: 
                         samples = torch.rand(grid_size**2, 3, self.config.data.image_size, self.config.data.image_size,device=self.config.device)
 
+                    print(samples)
                     all_samples = self.Langevin_dynamics_flowscore(samples, flow_net, score, 30, 0.04)
 
                     for i, sample in enumerate(tqdm.tqdm(all_samples, total=len(all_samples), desc='saving images')):
@@ -271,7 +272,7 @@ class FloppCorrectRunner():
         images = []
         loss_fn = util.NLLLoss().to(self.config.device)
         
-        x_mod.requires_grad_(True)
+        x_mod = torch.autograd.Variable(x_mod, requires_grad = True)
         for _ in range(n_steps):
             images.append(torch.clamp(x_mod, 0.0, 1.0).to('cpu'))
             noise = torch.randn_like(x_mod) * np.sqrt(step_lr * 2)
