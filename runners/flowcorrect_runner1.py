@@ -196,14 +196,14 @@ class FloppCorrectRunner():
                     
                 flow_optimizer.zero_grad()
                 z, sldj = flow_net(X.detach(), reverse=False)
-                flow_loss = loss_fn(z, sldj)
-                flow_loss.backward()
+                loss = loss_fn(z, sldj)
+                loss.backward()
                 if self.config.flow_training.max_grad_norm > 0:
                     util.clip_grad_norm(flow_optimizer, self.config.flow_training.max_grad_norm)
                     
                 flow_optimizer.step()
                 flow_scheduler.step(step*self.config.training.batch_size)
-                flow_losses.append(flow_loss.item())
+                flow_losses.append(loss.item())
                 
                 # train residual score
                 
@@ -218,13 +218,15 @@ class FloppCorrectRunner():
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+
+                sbm_losses.append(loss.item())
                 
                 flow_net.train()
                 for p in flow_net.parameters():
                     p.requires_grad_(True)
 
                 tb_logger.add_scalar('loss', loss, global_step=step)
-                logging.info("step: {}, flow_loss: {},stein loss: {}".format(step, flow_loss.item(), loss.item()))
+                logging.info("step: {}, flow_loss: {},stein loss: {}".format(step, flow_losses[-1], sbm_losses[-1]))
 
                 if step >= self.config.training.n_iters:
                     return 0
@@ -250,7 +252,7 @@ class FloppCorrectRunner():
                     else: 
                         samples = torch.rand(grid_size**2, 3, self.config.data.image_size, self.config.data.image_size,device=self.config.device)
 
-                    all_samples = self.Langevin_dynamics_flowscore(samples,flow_net, score, 1000, 0.00002)
+                    all_samples = self.Langevin_dynamics_flowscore(samples, flow_net, score, 30, 0.04)
 
                     for i, sample in enumerate(tqdm.tqdm(all_samples, total=len(all_samples), desc='saving images')):
                         sample = sample.view(grid_size ** 2, self.config.data.channels, self.config.data.image_size,
@@ -267,6 +269,7 @@ class FloppCorrectRunner():
 
     def Langevin_dynamics_flowscore(self, x_mod, flow, resscore, n_steps=1000, step_lr=0.00002):
         images = []
+        loss_fn = util.NLLLoss().to(self.config.device)
         
         x_mod.requires_grad_(True)
         for _ in range(n_steps):
@@ -274,9 +277,8 @@ class FloppCorrectRunner():
             noise = torch.randn_like(x_mod) * np.sqrt(step_lr * 2)
             x_mod.grad.zero_()
             (-loss_fn(*flow(x_mod, reverse=False))).backward()
-            grad = x_mod.grad.data - resscore(x_mod).detach()/self.config.training.lam
+            grad = x_mod.grad.data - resscore(x_mod).clone().detach()/self.config.training.lam
             x_mod.data.add_(step_lr*grad + noise)
-            images.append(x_mod.clone().detach())
             # print("modulus of grad components: mean {}, max {}".format(grad.abs().mean(), grad.abs().max()))
 
             return images
