@@ -193,48 +193,41 @@ class FloppCorrectRunner():
                         print('Begin training')
                     continue
                     
-                x_flow = sample_flow(flow_net, args.batch_size, device).detach()
                 flow_optimizer.zero_grad()
-                z, sldj = flow_net(x_ebm.detach(), reverse=False)
+                z, sldj = flow_net(X.detach(), reverse=False)
                 flow_loss = loss_fn(z, sldj)
-                flow_losses.append(flow_loss.item())
                 flow_loss.backward()
                 if self.config.flow_training.max_grad_norm > 0:
                     util.clip_grad_norm(flow_optimizer, self.config.flow_training.max_grad_norm)
                     
                 flow_optimizer.step()
                 flow_scheduler.step(step*self.config.training.batch_size)
-
-                loss = dsm_score_estimation(score, X, sigma=0.01)
+                flow_losses.append(flow_loss.item())
+                
+                # train residual score
+                
+                flow_net.eval()
+                for p in flow_net.parameters():
+                    p.requires_grad_(False)
+                    
+                X.requires_grad_(True)
+                total_score = lambda X: torch.autograd.grad(-loss_fn(*flow_net(X, reverse=False)), X, retain_graph=True, create_graph=True)[0] - score(X)/self.config.training.lam
+                loss = dsm_score_estimation(total_score, X, sigma=0.01)
 
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+                
+                flow_net.train()
+                for p in flow_net.parameters():
+                    p.requires_grad_(True)
 
                 tb_logger.add_scalar('loss', loss, global_step=step)
-                logging.info("step: {}, loss: {}".format(step, loss.item()))
+                logging.info("step: {}, flow_loss: {},stein loss: {}".format(step, flow_loss.item(), loss.item()))
 
                 if step >= self.config.training.n_iters:
                     return 0
-
-                # if step % 100 == 0:
-                    # score.eval()
-                    # try:
-                    #     test_X, test_y = next(test_iter)
-                    # except StopIteration:
-                    #     test_iter = iter(test_loader)
-                    #     test_X, test_y = next(test_iter)
-
-                    # test_X = test_X.to(self.config.device)
-                    # test_X = test_X / 256. * 255. + torch.rand_like(test_X) / 256.
-                    # if self.config.data.logit_transform:
-                    #     test_X = self.logit_transform(test_X)
-
-                    # with torch.no_grad():
-                    #     test_dsm_loss = dsm_score_estimation(score, test_X, sigma=0.01)
-
-                    # tb_logger.add_scalar('test_dsm_loss', test_dsm_loss, global_step=step)
-
+                
                 if step % self.config.training.snapshot_freq == 0:
                     states = [
                         score.state_dict(),
@@ -243,20 +236,19 @@ class FloppCorrectRunner():
                     # torch.save(states, os.path.join(self.args.log, 'checkpoint_{}.pth'.format(step)))
                     torch.save(states, os.path.join(self.args.log, 'checkpoint.pth'))
 
-                    with torch.no_grad():
-                        self.test(score=score,iters=step)
-
-
-    def Langevin_dynamics(self, x_mod, scorenet, n_steps=1000, step_lr=0.00002):
+    def Langevin_dynamics_flowscore(self, x_mod, flow, resscore, n_steps=1000, step_lr=0.00002):
         images = []
-
-        with torch.no_grad():
-            for _ in range(n_steps):
-                images.append(torch.clamp(x_mod, 0.0, 1.0).to('cpu'))
-                noise = torch.randn_like(x_mod) * np.sqrt(step_lr * 2)
-                grad = scorenet(x_mod)
-                x_mod = x_mod + step_lr * grad + noise
-#                 print("modulus of grad components: mean {}, max {}".format(grad.abs().mean(), grad.abs().max()))
+        
+        x_mod.requires_grad_(True)
+        for _ in range(n_steps):
+            images.append(torch.clamp(x_mod, 0.0, 1.0).to('cpu'))
+            noise = torch.randn_like(x_mod) * np.sqrt(step_lr * 2)
+            x_mod.grad.zero_()
+            (-loss_fn(*flow(x_mod, reverse=False))).backward()
+            grad = x_mod.grad.data - resscore(x_mod).detach()/self.config.training.lam
+            x_mod.data.add_(step_lr*grad + noise)
+            images.append(x_mod.clone().detach())
+            # print("modulus of grad components: mean {}, max {}".format(grad.abs().mean(), grad.abs().max()))
 
             return images
 
