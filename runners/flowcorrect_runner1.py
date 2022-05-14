@@ -105,19 +105,9 @@ class FloppCorrectRunner():
                                      transforms.ToTensor(),
                                  ]), download=True)
 
-            # test_dataset = CelebA(root=os.path.join(self.args.run, 'datasets', 'celeba_test'), split='test',
-            #                       transform=transforms.Compose([
-            #                           transforms.CenterCrop(140),
-            #                           transforms.Resize(self.config.data.image_size),
-            #                           transforms.ToTensor(),
-            #                       ]), download=True)
-
 
         dataloader = DataLoader(dataset, batch_size=self.config.training.batch_size, shuffle=True, num_workers=4)
-        # test_loader = DataLoader(test_dataset, batch_size=self.config.training.batch_size, shuffle=True,
-        #                          num_workers=4, drop_last=True)
 
-        # test_iter = iter(test_loader)
         self.config.input_dim = self.config.data.image_size ** 2 * self.config.data.channels
 
         tb_path = os.path.join(self.args.run, 'tensorboard', self.args.doc)
@@ -240,7 +230,7 @@ class FloppCorrectRunner():
                     torch.save(states, os.path.join(self.args.log, 'checkpoint.pth'))
                     
                     # visualize and save
-                    grid_size = 6
+                    grid_size = 4
                     if not os.path.exists(self.args.image_folder):
                         os.makedirs(self.args.image_folder)
                     score.eval()
@@ -252,14 +242,14 @@ class FloppCorrectRunner():
                     else: 
                         samples = torch.rand(grid_size**2, 3, self.config.data.image_size, self.config.data.image_size,device=self.config.device)
 
-                    print(samples)
                     all_samples = self.Langevin_dynamics_flowscore(samples, flow_net, score, 30, 0.04)
 
-                    for i, sample in enumerate(tqdm.tqdm(all_samples, total=len(all_samples), desc='saving images')):
+                    for i, sample in enumerate(all_samples):
                         sample = sample.view(grid_size ** 2, self.config.data.channels, self.config.data.image_size,
                                              self.config.data.image_size)
                         if self.config.data.logit_transform:
                             sample = torch.sigmoid(sample)
+                        image_grid = make_grid(all_samples[-1], nrow=grid_size)
                         if i % 10 == 0:
                             im = Image.fromarray(image_grid.mul_(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to('cpu', torch.uint8).numpy())
                             imgs.append(im)
@@ -274,11 +264,11 @@ class FloppCorrectRunner():
         
         x_mod = torch.autograd.Variable(x_mod, requires_grad = True)
         for _ in range(n_steps):
+            print(_)
             images.append(torch.clamp(x_mod, 0.0, 1.0).to('cpu'))
             noise = torch.randn_like(x_mod) * np.sqrt(step_lr * 2)
-            x_mod.grad.zero_()
-            (-loss_fn(*flow(x_mod, reverse=False))).backward()
-            grad = x_mod.grad.data - resscore(x_mod).clone().detach()/self.config.training.lam
+            grad = torch.autograd.grad(-loss_fn(*flow(x_mod)),[x_mod])[0]
+            grad -= resscore(x_mod).clone().detach()/self.config.training.lam
             x_mod.data.add_(step_lr*grad + noise)
             # print("modulus of grad components: mean {}, max {}".format(grad.abs().mean(), grad.abs().max()))
 
