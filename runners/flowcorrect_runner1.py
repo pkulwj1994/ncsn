@@ -138,8 +138,8 @@ class FloppCorrectRunner():
                            use_attn=self.config.flow_model.use_attn,
                            drop_prob=self.config.flow_model.drop_prob)
         flow_net = flow_net.to(self.config.device)
-        flow_net = torch.nn.DataParallel(flow_net, args.gpu_ids)
-        cudnn.benchmark = args.benchmark
+        flow_net = torch.nn.DataParallel(flow_net)
+        cudnn.benchmark = True
         
         loss_fn = util.NLLLoss().to(device)
         flow_param_groups = util.get_param_groups(flow_net, self.config.flow_training.weight_decay, norm_suffix='weight_g')
