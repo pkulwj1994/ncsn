@@ -3,7 +3,7 @@ training:
   n_epochs: 500000
   n_iters: 200001
   ngpu: 1
-  snapshot_freq: 5000
+  snapshot_freq: 100
   algo: 'dsm'
   n_particles: 1
   anneal_power: 2.0
@@ -49,7 +49,7 @@ model:
 flow_model:
   num_channels: 96
   num_blocks: 10
-  num_dequant_blocks: 0
+  num_dequant_blocks: 2 # options = [0, 2]
   num_components: 32
   use_attn: true
   drop_prob: 0.2
