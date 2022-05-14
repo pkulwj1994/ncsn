@@ -142,9 +142,9 @@ class FloppCorrectRunner():
         cudnn.benchmark = args.benchmark
         
         loss_fn = util.NLLLoss().to(device)
-        flow_param_groups = util.get_param_groups(flow_net, self.config.flow_training.args.weight_decay, norm_suffix='weight_g')
-        flow_optimizer = optim.Adam(flow_param_groups, lr=self.config.flow_training.args.lr_flow)
-        warm_up = self.config.flow_training.args.warm_up * self.config.flow_training.args.batch_size
+        flow_param_groups = util.get_param_groups(flow_net, self.config.flow_training.weight_decay, norm_suffix='weight_g')
+        flow_optimizer = optim.Adam(flow_param_groups, lr=self.config.flow_training.lr_flow)
+        warm_up = self.config.flow_training.warm_up * self.config.training.batch_size
         flow_scheduler = sched.LambdaLR(flow_optimizer, lambda s: min(1., s / warm_up))
         
         
