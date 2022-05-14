@@ -1,32 +1,3 @@
-import numpy as np
-import tqdm
-from losses.dsm import dsm_score_estimation
-import torch.nn.functional as F
-import logging
-import torch
-import os
-import shutil
-import tensorboardX
-import torch.optim as optim
-from torchvision.datasets import MNIST, CIFAR10, FashionMNIST
-import torchvision.transforms as transforms
-from torch.utils.data import DataLoader, Subset
-from datasets.celeba import CelebA
-from models.refinenet_dilated_baseline import RefineNetDilated
-from torchvision.utils import save_image, make_grid
-from PIL import Image
-import shutil
-
-
-import argparse
-import numpy as np
-import os
-import time
-import random
-import torch
-import torch.optim as optim
-import torch.optim.lr_scheduler as sched
-import torch.backends.cudnn as cudnn
 import torch.utils.data as data
 import torchvision
 import torchvision.transforms as transforms
@@ -44,6 +15,7 @@ class FloppCorrectRunner():
     def __init__(self, args, config):
         self.args = args
         self.config = config
+        self.args.pretrained_flow = True
 
     def get_optimizer(self, parameters):
         if self.config.optim.optimizer == 'Adam':
