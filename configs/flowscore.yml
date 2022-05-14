@@ -18,11 +18,11 @@ flow_training:
 
 data:
   ## mnist
-  dataset: "MNIST"
-  image_size: 28
-  channels: 1
-  logit_transform: false
-  random_flip: false
+  # dataset: "MNIST"
+  # image_size: 28
+  # channels: 1
+  # logit_transform: false
+  # random_flip: false
   ## celeba
 #  dataset: "CELEBA"
 #  image_size: 32
@@ -30,11 +30,11 @@ data:
 #  logit_transform: false
 #  random_flip: true
 #         cifar10
-#  dataset: "CIFAR10"
-#  image_size: 32
-#  channels: 3
-#  logit_transform: false
-#  random_flip: true
+  dataset: "CIFAR10"
+  image_size: 32
+  channels: 3
+  logit_transform: false
+  random_flip: true
 
 model:
   sigma_begin: 1
