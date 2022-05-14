@@ -242,7 +242,7 @@ class FloppCorrectRunner():
                     else: 
                         samples = torch.rand(grid_size**2, 3, self.config.data.image_size, self.config.data.image_size,device=self.config.device)
 
-                    samples =  self.sample_flow(flow_net, 9, self.config.device).detach()
+                    samples =  self.sample_flow(flow_net, grid_size**2, self.config.device).detach()
                     all_samples = self.Langevin_dynamics_flowscore(samples, flow_net, score, 30, 0.04)
 
                     for i, sample in enumerate(all_samples):
