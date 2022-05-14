@@ -11,10 +11,10 @@ training:
   
 flow_training:
   batch_size: 128
-  lr_flow: 1
-  weight_decay: 1
-  warm_up: 1
-  max_grad_norm: 1
+  lr_flow: 1e-4
+  weight_decay: 5e-5
+  warm_up: 200
+  max_grad_norm: 1.
 
 data:
   ## mnist
@@ -47,12 +47,12 @@ model:
   ngf: 64
   
 flow_model:
-  num_channels: 1
-  num_blocks: 1
-  num_dequant_blocks: 1
-  num_components: 1
+  num_channels: 96
+  num_blocks: 10
+  num_dequant_blocks: 2
+  num_components: 32
   use_attn: true
-  drop_prob: 0
+  drop_prob: 0.2
 
 optim:
   weight_decay: 0.000
