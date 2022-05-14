@@ -281,6 +281,15 @@ class FloppCorrectRunner():
 
         return x
 
+    def compute_loglike(self, flow, x):
+        z, sldj = flow(x)
+
+        prior_ll = -0.5 * (z ** 2 + np.log(2 * np.pi))
+        prior_ll = prior_ll.flatten(1).sum(-1)
+        ll = prior_ll + sldj
+        
+        return None 
+
     def Langevin_dynamics_flowscore(self, x_mod, flow, resscore, n_steps=1000, step_lr=0.00002):
         images = []
         loss_fn = util.NLLLoss().to(self.config.device)
@@ -291,7 +300,7 @@ class FloppCorrectRunner():
             images.append(x_mod.clone().detach().to('cpu'))
 
             noise = torch.randn_like(x_mod) * np.sqrt(step_lr * 2)
-            grad = torch.autograd.grad(-loss_fn(*flow(x_mod))*x_mod.shape[0],[x_mod])[0]
+            grad = torch.autograd.grad(self.compute_loglike(flow, x_mod),[x_mod])[0]
             grad -= resscore(x_mod).clone().detach()/self.config.training.lam
             x_mod.data.add_(step_lr*grad + noise)
             # print("modulus of grad components: mean {}, max {}".format(grad.abs().mean(), grad.abs().max()))
