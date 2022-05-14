@@ -202,7 +202,7 @@ class FloppCorrectRunner():
                     p.requires_grad_(False)
                     
                 X.requires_grad_(True)
-                total_score = lambda X: torch.autograd.grad(-loss_fn(*flow_net(X, reverse=False)*X.shape[0]), X, retain_graph=True, create_graph=True)[0] - score(X)/self.config.training.lam
+                total_score = lambda X: torch.autograd.grad(-loss_fn(*flow_net(X, reverse=False))*X.shape[0], X, retain_graph=True, create_graph=True)[0] - score(X)/self.config.training.lam
                 loss = dsm_score_estimation(total_score, X, sigma=0.01)
 
                 optimizer.zero_grad()
@@ -279,7 +279,7 @@ class FloppCorrectRunner():
             print(_)
             images.append(torch.clamp(x_mod, 0.0, 1.0).to('cpu'))
             noise = torch.randn_like(x_mod) * np.sqrt(step_lr * 2)
-            grad = torch.autograd.grad(-loss_fn(*flow(x_mod)*x_mod.shape[0]),[x_mod])[0]
+            grad = torch.autograd.grad(-loss_fn(*flow(x_mod))*x_mod.shape[0],[x_mod])[0]
             grad -= resscore(x_mod).clone().detach()/self.config.training.lam
             x_mod.data.add_(step_lr*grad + noise)
             # print("modulus of grad components: mean {}, max {}".format(grad.abs().mean(), grad.abs().max()))
