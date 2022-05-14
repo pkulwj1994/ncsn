@@ -204,10 +204,6 @@ class FloppCorrectRunner():
                     
                 flow_optimizer.step()
                 flow_scheduler.step(step*self.config.training.batch_size)
-                
-                
-                
-                
 
                 loss = dsm_score_estimation(score, X, sigma=0.01)
 
