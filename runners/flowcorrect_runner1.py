@@ -17,10 +17,30 @@ from torchvision.utils import save_image, make_grid
 from PIL import Image
 import shutil
 
-__all__ = ['BaselineRunner']
+
+import argparse
+import numpy as np
+import os
+import time
+import random
+import torch
+import torch.optim as optim
+import torch.optim.lr_scheduler as sched
+import torch.backends.cudnn as cudnn
+import torch.utils.data as data
+import torchvision
+import torchvision.transforms as transforms
+import util
+import math
+from models import FlowPlusPlus
+from models import EBM_res as EBM
+from tqdm import tqdm
+from matplotlib import pyplot as plt
+
+__all__ = ['FloppCorrectRunner']
 
 
-class BaselineRunner():
+class FloppCorrectRunner():
     def __init__(self, args, config):
         self.args = args
         self.config = config
@@ -105,6 +125,31 @@ class BaselineRunner():
             shutil.rmtree(tb_path)
 
         tb_logger = tensorboardX.SummaryWriter(log_dir=tb_path)
+        
+        # Model
+        print('Building model..')
+        flow_net = FlowPlusPlus(scales=[(0, 4), (2, 3)],
+                           in_shape=(3, 32, 32),
+                           mid_channels=self.config.flow_model.num_channels,
+                           num_blocks=self.config.flow_model.num_blocks,
+                           num_dequant_blocks=self.config.flow_model.num_dequant_blocks,
+                           #num_dequant_blocks=-1,
+                           num_components=self.config.flow_model.num_components,
+                           use_attn=self.config.flow_model.use_attn,
+                           drop_prob=self.config.flow_model.drop_prob)
+        flow_net = flow_net.to(self.config.device)
+        flow_net = torch.nn.DataParallel(flow_net, args.gpu_ids)
+        cudnn.benchmark = args.benchmark
+        
+        loss_fn = util.NLLLoss().to(device)
+        flow_param_groups = util.get_param_groups(flow_net, self.config.flow_training.args.weight_decay, norm_suffix='weight_g')
+        flow_optimizer = optim.Adam(flow_param_groups, lr=self.config.flow_training.args.lr_flow)
+        warm_up = self.config.flow_training.args.warm_up * self.config.flow_training.args.batch_size
+        flow_scheduler = sched.LambdaLR(flow_optimizer, lambda s: min(1., s / warm_up))
+        
+        
+        
+            
         score = RefineNetDilated(self.config).to(self.config.device)
 
         score = torch.nn.DataParallel(score)
