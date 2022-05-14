@@ -228,6 +228,16 @@ class FloppCorrectRunner():
                     ]
                     # torch.save(states, os.path.join(self.args.log, 'checkpoint_{}.pth'.format(step)))
                     torch.save(states, os.path.join(self.args.log, 'checkpoint.pth'))
+
+                    fig = plt.figure()
+                    ax1 = plt.subplot(2,1,1)
+                    plt.plot(flow_losses)
+
+                    ax2 = plt.subplot(2,1,2)
+                    plt.plot(sbm_losses)
+
+                    plt.savefig(os.path.join(self.args.log, 'losses.png'))
+
                     
                     # visualize and save
                     grid_size = 4
@@ -243,8 +253,7 @@ class FloppCorrectRunner():
                         samples = torch.rand(grid_size**2, 3, self.config.data.image_size, self.config.data.image_size,device=self.config.device)
 
                     samples =  self.sample_flow(flow_net, grid_size**2, self.config.device).detach()
-                    all_samples = self.Langevin_dynamics_flowscore(samples, flow_net, score, 30, 0.04)
-
+                    all_samples = self.Langevin_dynamics_flowscore(samples.clone().detach(), flow_net, score, 30, 0.04)
                     for i, sample in enumerate(all_samples):
                         sample = sample.view(grid_size ** 2, self.config.data.channels, self.config.data.image_size,
                                              self.config.data.image_size)
@@ -257,6 +266,8 @@ class FloppCorrectRunner():
 
                     image_grid = make_grid(all_samples[-1], nrow=grid_size)
                     save_image(image_grid, os.path.join(self.args.log, 'image_{}.png'.format(step)))
+                    image_grid = make_grid(all_samples[0], nrow=grid_size)
+                    save_image(image_grid, os.path.join(self.args.log, 'flow_image_{}.png'.format(step)))
 
                     image_grid = make_grid(all_samples[0], nrow=grid_size)
                     save_image(image_grid, os.path.join(self.args.log, 'flow_image_{}.png'.format(step)))
@@ -276,8 +287,9 @@ class FloppCorrectRunner():
         
         x_mod = torch.autograd.Variable(x_mod, requires_grad = True)
         for _ in range(n_steps):
-            print(_)
-            images.append(torch.clamp(x_mod, 0.0, 1.0).to('cpu'))
+            x_mod.data.clamp_(0.0, 1.0)
+            images.append(x_mod.clone().detach().to('cpu'))
+
             noise = torch.randn_like(x_mod) * np.sqrt(step_lr * 2)
             grad = torch.autograd.grad(-loss_fn(*flow(x_mod))*x_mod.shape[0],[x_mod])[0]
             grad -= resscore(x_mod).clone().detach()/self.config.training.lam
