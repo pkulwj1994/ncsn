@@ -97,3 +97,30 @@ def annealed_ssc(basescore,resscore, samples,sigmas, labels=None, lam=1.0, annea
     loss = loss * (used_sigmas.squeeze() ** 2)
     
     return loss.mean(dim=0)
+
+
+def ssc(basescore,resscore, samples, lam=1.0, n_particles=1):
+    dup_samples = samples.unsqueeze(0).expand(n_particles, *samples.shape).contiguous().view(-1,*samples.shape[1:])
+    dup_samples.requires_grad_(True)
+    
+    # calc trace J, use Rademacher
+    vectors = torch.randn_like(dup_samples)
+    grad1 = resscore(dup_samples)
+    gradv = torch.sum(grad1 * vectors)
+    grad2 = autograd.grad(gradv, dup_samples, create_graph=True)[0]
+    grad1 = grad1.view(dup_samples.shape[0], -1)
+    
+    sq = basescore(dup_samples).detach().view(dup_samples.shape[0], -1)
+    sq_fx = torch.sum(sq*grad1, dim=-1)
+    norm2 = torch.sum(grad1 * grad1, dim=-1)
+    tr_dfdx = torch.sum((vectors * grad2).view(dup_samples.shape[0], -1), dim=-1)
+    
+    
+    sq_fx = sq_fx.view(n_particles, -1).mean(dim=0)
+    norm2 = norm2.view(n_particles, -1).mean(dim=0)
+    tr_dfdx = tr_dfdx.view(n_particles, -1).mean(dim=0)
+
+    loss = (-1.0*(sq_fx + tr_dfdx) + 0.5*norm2/lam)/lam
+    loss = loss
+    
+    return loss.mean(dim=0)
