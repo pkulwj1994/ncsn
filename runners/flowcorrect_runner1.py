@@ -141,7 +141,7 @@ class FloppCorrectRunner():
         flow_net = torch.nn.DataParallel(flow_net)
         cudnn.benchmark = True
         
-        loss_fn = util.NLLLoss().to(device)
+        loss_fn = util.NLLLoss().to(self.config.device)
         flow_param_groups = util.get_param_groups(flow_net, self.config.flow_training.weight_decay, norm_suffix='weight_g')
         flow_optimizer = optim.Adam(flow_param_groups, lr=self.config.flow_training.lr_flow)
         warm_up = self.config.flow_training.warm_up * self.config.training.batch_size
@@ -162,6 +162,7 @@ class FloppCorrectRunner():
             optimizer.load_state_dict(states[1])
 
         step = -1
+        count = 0
         
         flow_losses = []
         sbm_losses = []
@@ -180,16 +181,16 @@ class FloppCorrectRunner():
                     X = self.logit_transform(X)
                     
                 if epoch == 0 and step < 200:
-                    if step == -1:
+                    if count == -1:
                         print('Data dependent initialization for flow parameter at the begining of training')
-                    x_list.append(x.clone()) # use more data to do data dependent initialization
+                    x_list.append(X.clone()) # use more data to do data dependent initialization
                     if len(x_list) >= 20:
                         x_list = torch.cat(x_list, dim=0)
                         with torch.no_grad():
                             flow_net(x_list.detach(), reverse=False)
                         x_list = []
-                    counter += 1
-                    if counter == 199:
+                    count += 1
+                    if count == 199:
                         print('Begin training')
                     continue
                     
