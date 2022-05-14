@@ -176,6 +176,9 @@ class FloppCorrectRunner():
                 if self.config.data.logit_transform:
                     X = self.logit_transform(X)
 
+                # flow input should *2 -1
+                X = X*2.0 - 1.0
+
                 # if flow pretrained, no training for flow    
                 if not self.args.pretrained_flow:
                     if epoch == 0 and step < 200:
@@ -261,6 +264,9 @@ class FloppCorrectRunner():
                         samples = torch.rand(grid_size**2, 3, self.config.data.image_size, self.config.data.image_size,device=self.config.device)
 
                     samples =  self.sample_flow(flow_net, grid_size**2, self.config.device).detach()
+
+                    # flow samples should +1/2
+                    samples = (samples+1)/2.0
                     all_samples = self.Langevin_dynamics_flowscore(samples.clone().detach(), flow_net, score, 30, 0.04)
                     for i, sample in enumerate(all_samples):
                         sample = sample.view(grid_size ** 2, self.config.data.channels, self.config.data.image_size,
