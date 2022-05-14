@@ -161,17 +161,53 @@ class FloppCorrectRunner():
             score.load_state_dict(states[0])
             optimizer.load_state_dict(states[1])
 
-        step = 0
-
+        step = -1
+        
+        flow_losses = []
+        sbm_losses = []
         for epoch in range(self.config.training.n_epochs):
             for i, (X, y) in enumerate(dataloader):
                 step += 1
 
                 score.train()
+                flow_net.train()
+                
+                x_list = []
+                # train flow model
                 X = X.to(self.config.device)
                 X = X / 256. * 255. + torch.rand_like(X) / 256.
                 if self.config.data.logit_transform:
                     X = self.logit_transform(X)
+                    
+                if epoch == 0 and step < 200:
+                    if step == -1:
+                        print('Data dependent initialization for flow parameter at the begining of training')
+                    x_list.append(x.clone()) # use more data to do data dependent initialization
+                    if len(x_list) >= 20:
+                        x_list = torch.cat(x_list, dim=0)
+                        with torch.no_grad():
+                            flow_net(x_list.detach(), reverse=False)
+                        x_list = []
+                    counter += 1
+                    if counter == 199:
+                        print('Begin training')
+                    continue
+                    
+                x_flow = sample_flow(flow_net, args.batch_size, device).detach()
+                flow_optimizer.zero_grad()
+                z, sldj = flow_net(x_ebm.detach(), reverse=False)
+                flow_loss = loss_fn(z, sldj)
+                flow_losses.append(flow_loss.item())
+                flow_loss.backward()
+                if self.config.flow_training.max_grad_norm > 0:
+                    util.clip_grad_norm(flow_optimizer, self.config.flow_training.max_grad_norm)
+                    
+                flow_optimizer.step()
+                flow_scheduler.step(step*self.config.training.batch_size)
+                
+                
+                
+                
 
                 loss = dsm_score_estimation(score, X, sigma=0.01)
 
